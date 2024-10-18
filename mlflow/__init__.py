@@ -81,6 +81,7 @@ sentence_transformers = LazyLoader(
 )
 shap = LazyLoader("mlflow.shap", globals(), "mlflow.shap")
 sklearn = LazyLoader("mlflow.sklearn", globals(), "mlflow.sklearn")
+getml = LazyLoader("mlflow.getml", globals(), "mlflow.getml")
 spacy = LazyLoader("mlflow.spacy", globals(), "mlflow.spacy")
 spark = LazyLoader("mlflow.spark", globals(), "mlflow.spark")
 statsmodels = LazyLoader("mlflow.statsmodels", globals(), "mlflow.statsmodels")
