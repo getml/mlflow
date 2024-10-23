@@ -111,7 +111,7 @@ def save_model(
     getml_working_dir_candidates = []
     current_user_home_dir = pathlib.Path.home()
     getml_project_name = settings.get("project_name", getml.project.name) if settings else getml.project.name  # type: ignore
-    
+
     if settings and (wd := settings.get("working_dir")):
         if not pathlib.Path(wd).exists():
             raise Exception(f"{wd} Working directory does not exists")
@@ -120,11 +120,13 @@ def save_model(
         getml_working_dir_candidates.append(pathlib.Path(wd))
     if site_package_inst:= [f for f in pathlib.Path(sys.executable).parents[1].rglob('.getML')]:
         getml_working_dir_candidates.append(pathlib.Path(site_package_inst[0]))
+        
     if getml_working_dir_candidates:
         for candidate in getml_working_dir_candidates:
             if (
                 getml_project_folder := candidate / "projects" / getml_project_name
             ).exists():
+                print(f'getml working directory chosen: {getml_project_folder}')
                 break
         else:
             raise Exception(f"No project folder in any of these getml project directories exist: {getml_working_dir_candidates}")
