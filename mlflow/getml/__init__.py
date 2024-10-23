@@ -100,6 +100,7 @@ def save_model(
     metadata=None,
 ):
     import getml
+    import sys
 
     _validate_env_arguments(conda_env, pip_requirements, extra_pip_requirements)
     path = os.path.abspath(path)
@@ -107,23 +108,28 @@ def save_model(
     _validate_and_prepare_target_save_path(path)
     code_dir_subpath = _validate_and_copy_code_paths(code_paths, path)
 
+    getml_working_dir_candidates = []
     current_user_home_dir = pathlib.Path.home()
-
     getml_project_name = settings.get("project_name", getml.project.name) if settings else getml.project.name  # type: ignore
+    
     if settings and (wd := settings.get("working_dir")):
         if not pathlib.Path(wd).exists():
             raise Exception(f"{wd} Working directory does not exists")
-        getml_working_dir = pathlib.Path(wd)
-    elif (wd := current_user_home_dir / ".getML").exists():
-        getml_working_dir = wd
+        getml_working_dir_candidates.append(pathlib.Path(wd))
+    if (wd := current_user_home_dir / ".getML").exists():
+        getml_working_dir_candidates.append(pathlib.Path(wd))
+    if site_package_inst:= [f for f in pathlib.Path(sys.executable).parents[1].rglob('.getML')]:
+        getml_working_dir_candidates.append(pathlib.Path(site_package_inst[0]))
+    if getml_working_dir_candidates:
+        for candidate in getml_working_dir_candidates:
+            if (
+                getml_project_folder := candidate / "projects" / getml_project_name
+            ).exists():
+                break
+        else:
+            raise Exception(f"No project folder in any of these getml project directories exist: {getml_working_dir_candidates}")
     else:
         raise Exception("No default getML project directory")
-
-    assert getml_project_name
-    if not (
-        getml_project_folder := getml_working_dir / "projects" / getml_project_name
-    ).exists():
-        raise Exception(f"{getml_project_folder} does not exists")
 
     if mlflow_model is None:
         mlflow_model = Model()
