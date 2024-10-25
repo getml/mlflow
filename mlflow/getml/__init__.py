@@ -251,25 +251,62 @@ class _GetMLModelWrapper:
         return self.getml_pipeline
 
     def predict(self, data):
-        """
-            {
-                "population": [],
-                "peripherals": {
-                    "transaction": [],
-                    ...
-                }
-            }
-        """
-        # TODO: validate incoming data
-        def _extract_roles_from_data_model():
-            ...
+        import getml
+        self._validate_incoming_data(data)
+        roles = self._extract_roles_from_data_model()
 
-        def _validate():
-            ...
+        population = getml.data.DataFrame.from_pandas(data["population"], name="population")
+        for role, columns in roles['population'].items():
+            population.set_role(cols = columns, role = role)
+        
+        peripheral_frames = {}
+        for name, peripheral_df in data["peripheral"].items():
+            peripheral_frame = getml.data.DataFrame.from_pandas(peripheral_df, name=name)
+            for role in roles['peripherals'][name]:
+                peripheral_frame.set_role(cols = roles['peripherals'][name][role], role = role)
+            peripheral_frames[name] = peripheral_frame
 
-        self.getml_pipeline.check(data)
-        return self.getml_pipeline.predict(data)
+        container = getml.data.Container(population = population,
+                                         peripheral = peripheral_frames)
+        
+        return self.getml_pipeline.predict(container.full)
 
+
+    def _validate_incoming_data(self, data):
+        import pandas as pd
+        assert "population" in data
+        assert "peripheral" in data
+        assert isinstance(data["population"], pd.DataFrame)
+        assert isinstance(data["peripheral"], dict)
+
+        peripheral_names_in_data =[]
+
+        for name, df in data["peripheral"].items():
+            assert isinstance(df, pd.DataFrame)
+            peripheral_names_in_data.append(name)
+
+        for peripheral_table in self.getml_pipeline.data_model.population.children:
+            if peripheral_table.name not in peripheral_names_in_data:
+                raise Exception(f"Peripheral table {peripheral_table.name} is missing in the data")
+   
+        
+    def _extract_roles_from_data_model(self):
+        roles = {}
+        roles['population'] = {}
+        roles['peripherals'] = {}
+
+        for role in self.getml_pipeline.data_model.population.roles:
+            if self.getml_pipeline.data_model.population.roles[role]:
+                roles['population'][role] = self.getml_pipeline.data_model.population.roles[role]
+
+        for peripheral in self.getml_pipeline.data_model.population.children:
+            roles['peripherals'][peripheral.name] = {}
+            for role in peripheral.roles:
+                if peripheral.roles[role]:
+                    roles['peripherals'][peripheral.name][role] = peripheral.roles[role]
+                    
+        return roles
+    
 
 def _load_model(path):
     import getml
