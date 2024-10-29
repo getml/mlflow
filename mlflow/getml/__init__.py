@@ -255,16 +255,11 @@ class _GetMLModelWrapper:
         self._validate_incoming_data(data)
         roles = self._extract_roles_from_data_model()
 
-        population = getml.data.DataFrame.from_pandas(data["population"], name="population")
-        for role, columns in roles['population'].items():
-            population.set_role(cols = columns, role = role)
+        population = getml.data.DataFrame.from_pandas(data["population"], name="population", roles=roles['population'])
         
         peripheral_frames = {}
         for name, peripheral_df in data["peripheral"].items():
-            peripheral_frame = getml.data.DataFrame.from_pandas(peripheral_df, name=name)
-            for role in roles['peripherals'][name]:
-                peripheral_frame.set_role(cols = roles['peripherals'][name][role], role = role)
-            peripheral_frames[name] = peripheral_frame
+            peripheral_frames[name] = getml.data.DataFrame.from_pandas(peripheral_df, name=name, roles=roles['peripherals'][name])
 
         container = getml.data.Container(population = population,
                                          peripheral = peripheral_frames)
@@ -287,23 +282,16 @@ class _GetMLModelWrapper:
 
         for peripheral_table in self.getml_pipeline.data_model.population.children:
             if peripheral_table.name not in peripheral_names_in_data:
-                raise Exception(f"Peripheral table {peripheral_table.name} is missing in the data")
+                raise Exception(f"Peripheral table '{peripheral_table.name}' is missing in the data")
    
         
     def _extract_roles_from_data_model(self):
         roles = {}
-        roles['population'] = {}
         roles['peripherals'] = {}
-
-        for role in self.getml_pipeline.data_model.population.roles:
-            if self.getml_pipeline.data_model.population.roles[role]:
-                roles['population'][role] = self.getml_pipeline.data_model.population.roles[role]
+        roles['population'] = self.getml_pipeline.data_model.population.roles
 
         for peripheral in self.getml_pipeline.data_model.population.children:
-            roles['peripherals'][peripheral.name] = {}
-            for role in peripheral.roles:
-                if peripheral.roles[role]:
-                    roles['peripherals'][peripheral.name][role] = peripheral.roles[role]
+            roles['peripherals'][peripheral.name]= peripheral.roles 
                     
         return roles
     
