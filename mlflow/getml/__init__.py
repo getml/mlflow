@@ -34,7 +34,13 @@ from mlflow.utils.model_utils import (
     _validate_and_copy_code_paths,
     _validate_and_prepare_target_save_path,
 )
+
+from mlflow.utils.autologging_utils import (
+    autologging_integration
+)
 from mlflow.utils.requirements_utils import _get_pinned_requirement
+
+from .autologging import autolog as _autolog
 
 FLAVOR_NAME = "getml"
 
@@ -145,7 +151,7 @@ def save_model(
     pyfunc.add_to_model(
         mlflow_model,
         loader_module="mlflow.getml",
-        data=path,
+        data=None,
         conda_env=_CONDA_ENV_FILE_NAME,
         python=_PYTHON_ENV_FILE_NAME,
         code=code_dir_subpath,
@@ -300,6 +306,7 @@ def _load_model(path):
     import getml
     import shutil
 
+    import pdb; pdb.set_trace()
     with open(os.path.join(path, "getml.yaml")) as f:
         getml_settings = yaml.safe_load(f.read())
 
@@ -364,7 +371,27 @@ def load_model(model_uri, dst_path=None):
     return _load_model(path=getml_model_file_path)
 
 
-
+@autologging_integration(FLAVOR_NAME)
+def autolog(
+    log_input_examples=False,
+    log_model_signatures=True,
+    log_models=True,
+    log_datasets=True,
+    disable=False,
+    exclusive=False,
+    disable_for_unsupported_versions=False,
+    silent=False,
+    max_tuning_runs=5,
+    log_post_training_metrics=True,
+):
+    return _autolog(
+        flavor_name = FLAVOR_NAME,
+        log_input_examples=log_input_examples,
+        log_model_signatures=log_model_signatures,
+        log_models=log_models,
+        log_datasets=log_datasets,
+        log_post_training_metrics=log_post_training_metrics,
+    )
 
 
 
