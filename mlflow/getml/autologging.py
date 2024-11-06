@@ -14,6 +14,7 @@ class LogInfo:
     metrics: dict[str, float] = field(default_factory=dict)
     tags: dict[str, Any] = field(default_factory=dict)
 
+
 def autolog(
     flavor_name,
     log_input_examples=False,
@@ -33,11 +34,7 @@ def autolog(
     from dataclasses import fields, dataclass, is_dataclass
 
     def _patch_pipeline_method(flavor_name, class_def, func_name, patched_fn, manage_run):
-                #original = gorilla.get_original_attribute(
-                #    class_def,
-                #    func_name,
-                #    bypass_descriptor_protocol=False
-                #)
+        print(f"patching {flavor_name}.{class_def.__name__}.{func_name}")
         safe_patch(
             flavor_name,
             class_def,
@@ -45,6 +42,7 @@ def autolog(
             patched_fn,
             manage_run=manage_run,
         )
+        print(f"done patching {flavor_name}.{class_def.__name__}.{func_name}")
 
     def _extract_pipeline_informations(getml_pipeline: getml.Pipeline) -> LogInfo:
         params = (
@@ -65,7 +63,9 @@ def autolog(
                         name = v.__class__.__name__
                         for field in fields(v):
                             field_value = getattr(v, field.name)
-                            if not isinstance(field_value, str):
+                            if isinstance(field_value, (frozenset, set)):
+                                field_value = json.dumps(list(field_value))
+                            elif not isinstance(field_value, str):
                                 field_value = json.dumps(field_value)
                             pipeline_informations[f"{parameter_name}.{name}.{field.name}"] = field_value
             #else:
@@ -81,13 +81,31 @@ def autolog(
         params ={
             "pipeline_id": getml_pipeline.id,
         }
-        metrics = {
-        }
-        if len(getml_pipeline.targets) == 1:
-            params["targets"] = getml_pipeline.targets[0]
-        else:
-            for i, t in enumerate(getml_pipeline.targets):
-                params[f"targets.{i}"] = t
+
+        metrics = {}
+
+        scores = getml_pipeline.scores
+
+        if getml_pipeline.is_classification:
+            metrics["auc"] = scores.auc
+            metrics["accuracy"] = scores.accuracy
+            metrics["cross_entropy"] = scores.cross_entropy
+        
+        if getml_pipeline.is_regression:
+            metrics["mae"] = scores.mae
+            metrics["rmse"] = scores.rmse
+            metrics["rsquared"] = scores.rsquared
+
+        for feature in getml_pipeline.features:
+            metrics[f"{feature.name}.importance"] = json.dumps(feature.importance)
+            metrics[f"{feature.name}.correlation"] = json.dumps(feature.correlation)
+
+       
+        # if len(getml_pipeline.targets) == 1:
+        #     metrics["targets"] = getml_pipeline.targets[0]
+        # else:
+        #     for i, t in enumerate(getml_pipeline.targets):
+        #         metrics[f"targets.{i}"] = t
         return LogInfo(
             params=params,
             metrics=metrics,
@@ -99,6 +117,7 @@ def autolog(
 
 
     def patched_fit_mlflow(original, self: getml.Pipeline, *args, **kwargs):
+        print('running the patched function')
         autologging_client = MlflowAutologgingQueueingClient()
         assert (active_run := mlflow.active_run())
         run_id = active_run.info.run_id
@@ -111,7 +130,15 @@ def autolog(
             autologging_client.set_tags(run_id=run_id, tags=tags)
 
         # CALL
+        print('starting the original function')
         fit_output = original(self, *args, **kwargs)
+        print('finished the original function')
+
+        fitted_pipeline_log_info = _extract_fitted_pipeline_informations(self)
+        autologging_client.log_metrics(
+            run_id = run_id,
+            metrics=fitted_pipeline_log_info.metrics, 
+        )
         autologging_client.flush(synchronous=True)
         return fit_output
 
