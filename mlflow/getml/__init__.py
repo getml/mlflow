@@ -35,9 +35,7 @@ from mlflow.utils.model_utils import (
     _validate_and_prepare_target_save_path,
 )
 
-from mlflow.utils.autologging_utils import (
-    autologging_integration
-)
+from mlflow.utils.autologging_utils import autologging_integration
 from mlflow.utils.requirements_utils import _get_pinned_requirement
 
 from .autologging import autolog as _autolog
@@ -67,9 +65,8 @@ def get_default_conda_env(include_cloudpickle=False):
         The default Conda environment for MLflow Models produced by calls to
         :func:`save_model()` and :func:`log_model()`.
     """
-    return _mlflow_conda_env(
-        additional_pip_deps=get_default_pip_requirements(include_cloudpickle)
-    )
+    return _mlflow_conda_env(additional_pip_deps=get_default_pip_requirements(include_cloudpickle))
+
 
 def _ignore(pipeline_id: str, directory: str, files: list[str]):
     if "pipelines" in directory:
@@ -77,20 +74,17 @@ def _ignore(pipeline_id: str, directory: str, files: list[str]):
     return directory, files
 
 
-
 def _copy_getml_engine_folders(getml_project_folder: pathlib.Path, pipeline_id: str, dst_path: str):
     import shutil
-    dst_project_path = (pathlib.Path(dst_path) / "projects")
+
+    dst_project_path = pathlib.Path(dst_path) / "projects"
 
     # copy data structure but what is really necessary
     shutil.copytree(
         src=os.path.join(str(getml_project_folder)),
         dst=dst_project_path,
-        ignore=lambda directory, files: _ignore(pipeline_id, directory, files) 
+        ignore=lambda directory, files: _ignore(pipeline_id, directory, files),
     )
-
-    
-
 
 
 @format_docstring(LOG_MODEL_PARAM_DOCS.format(package_name="getml"))
@@ -115,7 +109,9 @@ def save_model(
 
     current_user_home_dir = pathlib.Path.home()
 
-    getml_project_name = settings.get("project_name", getml.project.name) if settings else getml.project.name  # type: ignore
+    getml_project_name = (
+        settings.get("project_name", getml.project.name) if settings else getml.project.name
+    )  # type: ignore
     if settings and (wd := settings.get("working_dir")):
         if not pathlib.Path(wd).exists():
             raise Exception(f"{wd} Working directory does not exists")
@@ -126,9 +122,7 @@ def save_model(
         raise Exception("No default getML project directory")
 
     assert getml_project_name
-    if not (
-        getml_project_folder := getml_working_dir / "projects" / getml_project_name
-    ).exists():
+    if not (getml_project_folder := getml_working_dir / "projects" / getml_project_name).exists():
         raise Exception(f"{getml_project_folder} does not exists")
 
     if mlflow_model is None:
@@ -147,7 +141,7 @@ def save_model(
         yaml.safe_dump(settings, stream=settings_file)
 
     _copy_getml_engine_folders(getml_project_folder, getml_pipeline.id, path)
-        # copy files from project folder
+    # copy files from project folder
     pyfunc.add_to_model(
         mlflow_model,
         loader_module="mlflow.getml",
@@ -248,8 +242,8 @@ def log_model(
         **kwargs,
     )
 
-class _GetMLModelWrapper:
 
+class _GetMLModelWrapper:
     def __init__(self, getml_pipeline):
         self.getml_pipeline = getml_pipeline
 
@@ -258,29 +252,33 @@ class _GetMLModelWrapper:
 
     def predict(self, data):
         import getml
+
         self._validate_incoming_data(data)
         roles = self._extract_roles_from_data_model()
 
-        population = getml.data.DataFrame.from_pandas(data["population"], name="population", roles=roles['population'])
-        
+        population = getml.data.DataFrame.from_pandas(
+            data["population"], name="population", roles=roles["population"]
+        )
+
         peripheral_frames = {}
         for name, peripheral_df in data["peripheral"].items():
-            peripheral_frames[name] = getml.data.DataFrame.from_pandas(peripheral_df, name=name, roles=roles['peripherals'][name])
+            peripheral_frames[name] = getml.data.DataFrame.from_pandas(
+                peripheral_df, name=name, roles=roles["peripherals"][name]
+            )
 
-        container = getml.data.Container(population = population,
-                                         peripheral = peripheral_frames)
-        
+        container = getml.data.Container(population=population, peripheral=peripheral_frames)
+
         return self.getml_pipeline.predict(container.full)
-
 
     def _validate_incoming_data(self, data):
         import pandas as pd
+
         assert "population" in data
         assert "peripheral" in data
         assert isinstance(data["population"], pd.DataFrame)
         assert isinstance(data["peripheral"], dict)
 
-        peripheral_names_in_data =[]
+        peripheral_names_in_data = []
 
         for name, df in data["peripheral"].items():
             assert isinstance(df, pd.DataFrame)
@@ -288,32 +286,35 @@ class _GetMLModelWrapper:
 
         for peripheral_table in self.getml_pipeline.data_model.population.children:
             if peripheral_table.name not in peripheral_names_in_data:
-                raise Exception(f"Peripheral table '{peripheral_table.name}' is missing in the data")
-   
-        
+                raise Exception(
+                    f"Peripheral table '{peripheral_table.name}' is missing in the data"
+                )
+
     def _extract_roles_from_data_model(self):
         roles = {}
-        roles['peripherals'] = {}
-        roles['population'] = self.getml_pipeline.data_model.population.roles
+        roles["peripherals"] = {}
+        roles["population"] = self.getml_pipeline.data_model.population.roles
 
         for peripheral in self.getml_pipeline.data_model.population.children:
-            roles['peripherals'][peripheral.name]= peripheral.roles 
-                    
+            roles["peripherals"][peripheral.name] = peripheral.roles
+
         return roles
-    
+
 
 def _load_model(path):
     import getml
     import shutil
 
-    import pdb; pdb.set_trace()
+    import pdb
+
+    pdb.set_trace()
     with open(os.path.join(path, "getml.yaml")) as f:
         getml_settings = yaml.safe_load(f.read())
 
     getml_project_name = getml_settings["getml_project_name"]
     getml_pipeline_id = getml_settings["pipeline_id"]
     current_user_home_dir = pathlib.Path.home()
-    getml_project_path = current_user_home_dir / ".getML" / "projects" / getml_project_name 
+    getml_project_path = current_user_home_dir / ".getML" / "projects" / getml_project_name
     shutil.copytree(
         src=os.path.join(path, "projects"),
         dst=str(getml_project_path),
@@ -322,7 +323,6 @@ def _load_model(path):
     getml.set_project(getml_project_name)
 
     return getml.pipeline.load(getml_pipeline_id)
-
 
 
 def _load_pyfunc(path):
@@ -385,15 +385,10 @@ def autolog(
     log_post_training_metrics=True,
 ):
     return _autolog(
-        flavor_name = FLAVOR_NAME,
+        flavor_name=FLAVOR_NAME,
         log_input_examples=log_input_examples,
         log_model_signatures=log_model_signatures,
         log_models=log_models,
         log_datasets=log_datasets,
         log_post_training_metrics=log_post_training_metrics,
     )
-
-
-
-
-
