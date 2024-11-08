@@ -108,7 +108,7 @@ def autolog(
             metrics=metrics,
         )
 
-    def _extract_engine_system_metrics(autologging_client, run_id, stop_event):
+    def _extract_engine_system_metrics(autologging_client: MlflowAutologgingQueueingClient, run_id: str, stop_event: threading.Event) -> None:
         import requests
         import numpy as np
 
