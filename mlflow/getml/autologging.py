@@ -108,25 +108,38 @@ def autolog(
             metrics=metrics,
         )
 
-    def _extract_engine_system_metrics(autologging_client: MlflowAutologgingQueueingClient, run_id: str, stop_event: threading.Event) -> None:
+    def _collect_available_engine_metrics() -> dict:
+        import requests
+
+        engine_metrics = {
+            "engine_cpu_usage_per_virtual_core_in_pct": "http://localhost:1709/getcpuusage/",
+            "memory_usage_in_pct": "http://localhost:1709/getmemoryusage/",
+        }
+        engine_metrics_to_be_tracked = {}
+        for metric_name, metric_url in engine_metrics.items():
+            if requests.get(metric_url).ok:
+                engine_metrics_to_be_tracked[metric_name] = metric_url
+        return engine_metrics_to_be_tracked
+
+    def _extract_engine_system_metrics(
+        autologging_client: MlflowAutologgingQueueingClient,
+        run_id: str,
+        stop_event: threading.Event,
+        engine_metrics_to_be_tracked: dict,
+    ) -> None:
         import requests
         import numpy as np
 
-        memory_usage_url = "http://localhost:1709/getmemoryusage/"
-        cpu_usage_url = "http://localhost:1709/getcpuusage/"
-
         step = 0
+        collected_metrics_data = {}
         while not stop_event.is_set():
-            memory_usage_response = requests.get(memory_usage_url)
-            cpu_usage_response = requests.get(cpu_usage_url)
-            memory_usage_data = memory_usage_response.json()["data"][0][-1]
-            cpu_usage_data = cpu_usage_response.json()["data"][0][-1]
+            for metric_name, metric_url in engine_metrics_to_be_tracked.items():
+                collected_metrics_data[metric_name] = np.round(
+                    requests.get(metric_url).json()["data"][0][-1], 2
+                )
             autologging_client.log_metrics(
                 run_id=run_id,
-                metrics={
-                    "engine_cpu_usage_per_virtual_core_in_pct": np.round(cpu_usage_data, 2),
-                    "memory_usage_in_pct": np.round(memory_usage_data, 2),
-                },
+                metrics=collected_metrics_data,
                 step=step,
             )
             step += 1
@@ -144,16 +157,26 @@ def autolog(
         if tags := pipeline_log_info.tags:
             autologging_client.set_tags(run_id=run_id, tags=tags)
 
-        stop_event = threading.Event()
-        metrics_thread = threading.Thread(
-            target=_extract_engine_system_metrics, args=(autologging_client, run_id, stop_event)
-        )
-        metrics_thread.start()
+        engine_metrics_to_be_tracked = _collect_available_engine_metrics()
+
+        if engine_metrics_to_be_tracked:
+            stop_event = threading.Event()
+            metrics_thread = threading.Thread(
+                target=_extract_engine_system_metrics,
+                args=(autologging_client, run_id, stop_event, engine_metrics_to_be_tracked),
+            )
+            metrics_thread.start()
+        else:
+            print(
+                "Engine metrics are not available. Please upgrade to the Enterprise edition. "
+                "If you already use the Enterprise edition, the Monitor is currently not accessible."
+            )
 
         fit_output = original(self, *args, **kwargs)
 
-        stop_event.set()
-        metrics_thread.join()
+        if engine_metrics_to_be_tracked:
+            stop_event.set()
+            metrics_thread.join()
 
         fitted_pipeline_log_info = _extract_fitted_pipeline_informations(self)
         autologging_client.log_metrics(
