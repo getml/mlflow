@@ -1,18 +1,18 @@
-import os
 import logging
+import os
 import pathlib
-
-from typing import Any, Literal, Union
+from typing import Any, Union
 
 import yaml
 
 import mlflow
 from mlflow import pyfunc
-from mlflow.models import Model, ModelSignature, ModelInputExample
+from mlflow.getml.autologging import autolog as _autolog
+from mlflow.models import Model
 from mlflow.models.model import MLMODEL_FILE_NAME
-from mlflow.utils.docstring_utils import LOG_MODEL_PARAM_DOCS, format_docstring
 from mlflow.tracking.artifact_utils import _download_artifact_from_uri
-
+from mlflow.utils.autologging_utils import autologging_integration
+from mlflow.utils.docstring_utils import LOG_MODEL_PARAM_DOCS, format_docstring
 from mlflow.utils.environment import (
     _CONDA_ENV_FILE_NAME,
     _CONSTRAINTS_FILE_NAME,
@@ -34,11 +34,7 @@ from mlflow.utils.model_utils import (
     _validate_and_copy_code_paths,
     _validate_and_prepare_target_save_path,
 )
-
-from mlflow.utils.autologging_utils import autologging_integration
 from mlflow.utils.requirements_utils import _get_pinned_requirement
-
-from .autologging import autolog as _autolog
 
 FLAVOR_NAME = "getml"
 
@@ -210,7 +206,7 @@ def log_model(
     """Log an H2O model as an MLflow artifact for the current run.
 
     Args:
-        h2o_model: H2O model to be saved.
+        getml_pipeline: getML pipeline to be saved.
         artifact_path: Run-relative artifact path.
         conda_env: {{ conda_env }}
         code_paths: {{ code_paths }}
@@ -222,7 +218,7 @@ def log_model(
         pip_requirements: {{ pip_requirements }}
         extra_pip_requirements: {{ extra_pip_requirements }}
         metadata:  {{ metadata }}
-        kwargs: kwargs to pass to ``h2o.save_model`` method.
+        kwargs: kwargs to pass to ``getml.save_model`` method.
 
     Returns:
         A :py:class:`ModelInfo <mlflow.models.model.ModelInfo>` instance that contains the
@@ -302,8 +298,9 @@ class _GetMLModelWrapper:
 
 
 def _load_model(path):
-    import getml
     import shutil
+
+    import getml
 
 
     with open(os.path.join(path, "getml.yaml")) as f:

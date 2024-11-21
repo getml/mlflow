@@ -1,13 +1,11 @@
 import json
+import threading
 from dataclasses import dataclass, field
 from typing import Any
-import threading
 
 import mlflow
-from mlflow.utils import gorilla
 from mlflow.utils.autologging_utils import safe_patch
 from mlflow.utils.autologging_utils.client import MlflowAutologgingQueueingClient
-
 
 
 @dataclass
@@ -31,11 +29,11 @@ def autolog(
     log_post_training_metrics=True,
 ):
     flavor_name = "getml"
+    from dataclasses import fields, is_dataclass
+
     import getml
-    from dataclasses import fields, dataclass, is_dataclass
 
     def _patch_pipeline_method(flavor_name, class_def, func_name, patched_fn, manage_run):
-        print(f"patching {flavor_name}.{class_def.__name__}.{func_name}")
         safe_patch(
             flavor_name,
             class_def,
@@ -43,7 +41,6 @@ def autolog(
             patched_fn,
             manage_run=manage_run,
         )
-        print(f"done patching {flavor_name}.{class_def.__name__}.{func_name}")
 
     def _extract_pipeline_informations(getml_pipeline: getml.Pipeline) -> LogInfo:
         params = (
@@ -64,19 +61,12 @@ def autolog(
                         for field in fields(v):
                             field_value = getattr(v, field.name)
                             if isinstance(field_value, (frozenset, set)):
-                                try:
-                                    field_value = json.dumps(list(field_value))
-                                except: 
-                                    print("Error in converting frozenset to list")
+                                field_value = json.dumps(list(field_value))
                             elif isinstance(field_value, getml.feature_learning.FastProp):
                                 field_value = field_value.__class__.__name__
                             elif not isinstance(field_value, str):
-                                try:
-                                    field_value = json.dumps(field_value)
-                                except: 
-                                    print("Error in converting field_value to json")
-                                    print(field_value)
-                            
+                                field_value = json.dumps(field_value)
+
                             pipeline_informations[f"{parameter_name}.{name}.{field.name}"] = (
                                 field_value
                             )
@@ -140,8 +130,8 @@ def autolog(
         stop_event: threading.Event,
         engine_metrics_to_be_tracked: dict,
     ) -> None:
-        import requests
         import numpy as np
+        import requests
 
         step = 0
         collected_metrics_data = {}
@@ -186,7 +176,6 @@ def autolog(
         else:
             print(
                 "Engine metrics are not available. Please upgrade to the Enterprise edition. "
-                "If you already use the Enterprise edition, the Monitor is currently not accessible."
             )
 
         fit_output = original(self, *args, **kwargs)
@@ -203,9 +192,9 @@ def autolog(
 
         autologging_client.flush(synchronous=True)
         return fit_output
-    
+
     def patched_score_method(original, self: getml.Pipeline, *args, **kwargs):
-        
+
         target = self.data_model.population.roles.target[0]
         pop_df = args[0].population.to_pandas()
         pop_df["predictions"] = self.predict(*args)
@@ -220,10 +209,8 @@ def autolog(
             evaluators=["default"],
         )
 
-        score_output = original(self, *args, **kwargs)
+        return original(self, *args, **kwargs)
 
-        return score_output
-        
 
     _patch_pipeline_method(
         flavor_name=flavor_name,
