@@ -305,9 +305,7 @@ def _load_model(path):
     import getml
     import shutil
 
-    import pdb
 
-    pdb.set_trace()
     with open(os.path.join(path, "getml.yaml")) as f:
         getml_settings = yaml.safe_load(f.read())
 
