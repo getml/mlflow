@@ -223,7 +223,7 @@ def autolog(
         if log_datasets:
             try:
                 datasets = []
-                population_dataset: PandasDataset = mlflow.data.from_pandas(args[0].population.to_pandas(), name = args[0].population.name) #args[0].population.name returns the wrong name
+                population_dataset: PandasDataset = mlflow.data.from_pandas(args[0].population.to_pandas(), name = args[0].population.base.name)
                 tags = [InputTag(key=MLFLOW_DATASET_CONTEXT, value='Population')]
                 datasets.append(DatasetInput(dataset=population_dataset._to_mlflow_entity(), tags=tags))
 
